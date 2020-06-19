@@ -1,0 +1,12 @@
+__pycache__
+.vscode
+build
+dist
+venv
+config.ini
+backup.gz
+BD_Arizona.backup
+BD_Arizona.backup.gz
+Faqture.spec
+token.pickle
+backup/credenciales/
