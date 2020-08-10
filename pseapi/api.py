@@ -1,11 +1,10 @@
 import requests
 
-from base.db import (
+from base.db import (_get_time,
     read_empresa_pgsql,
     update_venta_pgsql,
     update_venta_anulados_pgsql
 )
-#from cafaedb.models import update_enviado
 from urllib3.exceptions import InsecureRequestWarning
 
 # Disable flag warning
@@ -14,8 +13,10 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 def create_document(header_dics):
     #"crea boletas y facturas"
     convenio = read_empresa_pgsql()
-    url = convenio[0][2] + "/api/documents"
-    token = convenio[1][2]
+    url = convenio[1][2] + "/api/documents"
+    token = convenio[0][2]
+    #url = convenio[0][2] + "/api/documents" #para Delivery
+    #token = convenio[1][2]
     _send_cpe(url, token, header_dics)
 
 
@@ -36,6 +37,8 @@ def _send_cpe(url, token, data):
                 update_venta_pgsql(external_id, int(venta['id_venta']))
                 print(response.content)
             else:
+                print(_get_time(1) + ':')
+                print(response.content)
                 print(response.status_code)
         #cont += 1
 
@@ -60,13 +63,14 @@ def _send_cpe_anulados(url, token, data):
     for venta in data:
         #if cont == 0:
             response = requests.post(
-                url, json=venta, headers=header, verify=False)
-            
+                url, json=venta, headers=header, verify=False)            
             if response.status_code == 200:
                 r_json=response.json()
                 external_id=r_json['data']['external_id']
                 update_venta_anulados_pgsql(external_id, int(venta['id_venta']))
                 print(response.content)
             else:
+                print(_get_time(1) + ':')
+                print(response.content)
                 print(response.status_code)
         #cont += 1

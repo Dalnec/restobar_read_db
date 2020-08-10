@@ -2,7 +2,12 @@ import pyodbc
 import psycopg2
 from base.db import __conectarse, read_empresa_pgsql
 import decimal
+import configparser
 
+config = configparser.ConfigParser()
+config.read('config.ini')
+ubigeo = config['MODELS']['UBIGEO']
+date_header = config['MODELS']['DATE_HEADER']
 class Venta:
     tipo_venta = None
     serie_documento = None
@@ -28,7 +33,7 @@ class Venta:
     detalle_ventas = []
 
     def __str__(self):
-        return "{} - {} {}".format(self.tipo_venta, self.serie_documento, self.detalle_ventas) #ver para que sirve
+        return "{} - {} {}".format(self.tipo_venta, self.serie_documento, self.detalle_ventas)
 
 
 class DetalleVenta:
@@ -36,11 +41,11 @@ class DetalleVenta:
         #self.posicion = posicion
         self.codigo_producto = codigo_producto
         self.nombre_producto = nombre_producto
-        self.cantidad = int(cantidad)
+        self.cantidad = float(cantidad)
         self.precio_producto = float(precio_producto)
         self.unidad_medida = unidad_medida
-        self.total_impuestos_bolsa_plastica = total_impuestos_bolsa_plastica
-        self.descuento = descuento
+        self.total_impuestos_bolsa_plastica = float(total_impuestos_bolsa_plastica)
+        self.descuento = float(descuento)
 
     def __str__(self):
         return self.nombre_producto
@@ -80,7 +85,8 @@ def leer_db_access():
                 ventas.monto_venta total_valor, 
                 ventas.monto_venta+ ( case when( select sum(dv.impuesto_icbper) from gulash.detalle_venta dv where dv.id_venta= ventas.id_venta and dv.impuesto_icbper != 0) is null then 0 else (select sum(dv.impuesto_icbper) from gulash.detalle_venta dv where dv.id_venta= ventas.id_venta and dv.impuesto_icbper != 0) end ) total_venta,
                 medio_pago.descripcion informacion_adicional,
-                ventas.monto_efectivo
+                ventas.monto_efectivo,
+                ventas.descuento
             FROM 
                 gulash.ventas
                 INNER JOIN gulash.detalle_venta ON ventas.id_venta = detalle_venta.id_venta
@@ -93,8 +99,10 @@ def leer_db_access():
                 documento.estado='A' AND 
                 documento.electronico='S' AND
                 ventas.estado = 'A' AND
-                ventas.estado_declaracion = 'PENDIENTE'AND
-                ventas.fecha_hora > '2020-06-10'
+                ventas.estado_declaracion = 'PENDIENTE' AND
+                ventas.estado_declaracion_anulado = '' AND
+                ventas.fecha_hora = '2020-07-30 00:00:00'
+            ORDER BY id_venta
         """
 
     sql_detail = """
@@ -122,7 +130,7 @@ def leer_db_access():
             WHERE 
                 ventas.id_venta= {}
         """
-    cursor.execute(sql_header)
+    cursor.execute(sql_header.format(date_header))
 
     for row in cursor.fetchall():
         venta = Venta()
@@ -134,15 +142,16 @@ def leer_db_access():
         venta.codigo_tipo_documento_identidad = row[8]
         venta.documento_cliente = row[9]
         venta.nombre_cliente = row[10]
-        venta.direccion_cliente = row[13] if row[13] != None else '' #revisar en kenaani
+        venta.direccion_cliente = row[13] if row[13] != None else ''
         venta.email = row[14]
         venta.telefono = row[15]
         venta.delivery_telefono = row[16]
         venta.total_bolsa_plastica = row[21]        
         venta.total_venta = row[25]
         venta.forma_pago = row[26]
-        venta.total_descuento = 0
+        venta.total_descuentos = 0
         venta.total_efectivo = row[27]
+        venta.descuentos = row[28]
 
         '''venta.tipo_venta = row[3]
         venta.codigo_cliente = row[9]
@@ -153,7 +162,7 @@ def leer_db_access():
         cursor.execute(sql_detail.format(venta.id_venta))
         for deta in cursor.fetchall():  #codigo_producto, nombre_producto, cantidad, precio_producto, unidad_medida, total_impuestos_bolsa_plastica
             detalle_ventas.append(DetalleVenta(deta[0], deta[1], deta[4], deta[5], "UND", deta[12], deta[16]))
-            venta.total_descuento += deta[16]
+            venta.total_descuentos += deta[16]
         venta.detalle_ventas = detalle_ventas
         lista_ventas.append(venta)
     
@@ -184,22 +193,6 @@ def _generate_lista(ventas):
             '%Y-%m-%d')
         header_dic['numero_orden_de_compra'] = ''
 
-        # totales
-        datos_totales = {}
-        datos_totales['total_descuentos'] = float(venta.total_descuento)
-        datos_totales['total_exportacion'] = 0
-        datos_totales['total_operaciones_gravadas'] = 0
-        datos_totales['total_operaciones_inafectas'] = 0
-        datos_totales['total_operaciones_exoneradas'] = float(venta.total_venta) - float(venta.total_bolsa_plastica)
-        datos_totales['total_operaciones_gratuitas'] = 0
-        datos_totales['total_impuestos_bolsa_plastica'] = float(venta.total_bolsa_plastica)
-        datos_totales['total_igv'] = 0
-        datos_totales['total_impuestos'] = 0
-        datos_totales['total_valor'] = float(venta.total_venta) #- float(venta.total_venta * 18/100)
-        datos_totales['total_venta'] = float(venta.total_efectivo)
-
-        header_dic['totales'] = datos_totales
-
         # datos del cliente
         datos_del_cliente = {}
         datos_del_cliente['codigo_tipo_documento_identidad'] = venta.codigo_tipo_documento_identidad
@@ -212,6 +205,34 @@ def _generate_lista(ventas):
         datos_del_cliente['telefono'] = ''
 
         header_dic['datos_del_cliente_o_receptor'] = datos_del_cliente
+        # descuentos Total
+        '''if venta.descuentos != 0:
+            descT = []
+            descuentosT = {}
+            descuentosT['codigo'] = '03'
+            descuentosT['descripcion'] = "Descuento Global no afecta a la base imponible"
+            descuentosT['factor'] = float(venta.descuentos / venta.total_venta)
+            descuentosT['monto'] = float(venta.descuentos)
+            descuentosT['base'] = float(venta.total_venta)
+            descT.append(descuentosT)
+            header_dic['descuentos'] = descT'''
+
+        # totales
+        datos_totales = {}
+        if venta.total_descuentos != 0: 
+            datos_totales['total_descuentos'] = round(float(venta.total_descuentos),2)        
+        datos_totales['total_exportacion'] = 0
+        datos_totales['total_operaciones_gravadas'] = 0
+        datos_totales['total_operaciones_inafectas'] = 0
+        datos_totales['total_operaciones_exoneradas'] = float(venta.total_venta) - float(venta.total_bolsa_plastica)
+        datos_totales['total_operaciones_gratuitas'] = 0
+        datos_totales['total_impuestos_bolsa_plastica'] = float(venta.total_bolsa_plastica)
+        datos_totales['total_igv'] = 0
+        datos_totales['total_impuestos'] = 0
+        datos_totales['total_valor'] = float(venta.total_venta) - round(float(venta.total_descuentos),2)
+        datos_totales['total_venta'] = float(venta.total_venta) - round(float(venta.total_descuentos),2)
+
+        header_dic['totales'] = datos_totales        
         
         lista_items = []
         for deta in venta.detalle_ventas:
@@ -225,26 +246,27 @@ def _generate_lista(ventas):
             item['codigo_tipo_precio'] = '01'
             item['precio_unitario'] = deta.precio_producto
             item['codigo_tipo_afectacion_igv'] = '20'
-
+                
+            total_item = float(deta.cantidad * deta.precio_producto)
             # descuentos por item
-            desc = []
-            descuentos = {}
-            descuentos['codigo'] = '00'
-            descuentos['descripcion'] = "Descuento Lineal"
-            descuentos['factor'] = float((deta.descuento * 100 /50) / 100)
-            descuentos['monto'] = float(deta.descuento)
-            descuentos['base'] = float(100)
-            desc.append(descuentos)
-
-            item['descuentos'] = desc
-
-            item['total_base_igv'] = 0
+            '''if venta.total_descuentos != 0:
+                desc = []
+                descuentos = {}
+                descuentos['codigo'] = '00'
+                descuentos['descripcion'] = "Descuento Lineal"
+                descuentos['factor'] = round((deta.descuento / total_item), 2)
+                descuentos['monto'] = deta.descuento
+                descuentos['base'] = total_item
+                desc.append(descuentos)
+                item['descuentos'] = desc'''
+            
+            item['total_base_igv'] = total_item
             item['porcentaje_igv'] = 18
             item['total_igv'] = 0
-            item['total_impuestos_bolsa_plastica'] = float(deta.total_impuestos_bolsa_plastica)
+            item['total_impuestos_bolsa_plastica'] = deta.total_impuestos_bolsa_plastica
             item['total_impuestos'] = 0
-            item['total_valor_item'] = (deta.cantidad * deta.precio_producto)
-            item['total_item'] = (deta.cantidad * deta.precio_producto)
+            item['total_valor_item'] = total_item
+            item['total_item'] = total_item
             lista_items.append(item)
 
         header_dic['items'] = lista_items
