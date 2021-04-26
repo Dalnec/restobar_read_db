@@ -3,7 +3,8 @@ import requests
 from base.db import (_get_time,
     read_empresa_pgsql,
     update_venta_pgsql,
-    update_venta_anulados_pgsql
+    update_venta_anulados_pgsql,
+    update_rechazados_pgsql
 )
 from urllib3.exceptions import InsecureRequestWarning
 
@@ -15,8 +16,8 @@ def create_document(header_dics):
     convenio = read_empresa_pgsql()
     url = convenio[1][2] + "/api/documents"
     token = convenio[0][2]
-    #url = convenio[0][2] + "/api/documents" #para Delivery
-    #token = convenio[1][2]
+    # url = convenio[0][2] + "/api/documents" #para Delivery
+    # token = convenio[1][2]
     _send_cpe(url, token, header_dics)
 
 
@@ -47,10 +48,13 @@ def create_document_anulados(header_dics, tipo):
     #"crea facturas y boletas anuladas"
     convenio = read_empresa_pgsql()
     if tipo == 1 :
-        url = convenio[0][2] + "/api/voided"
+        #url = convenio[0][2] + "/api/voided"
+        url = convenio[1][2] + "/api/voided"
     else:
-        url = convenio[0][2] + "/api/summaries"
-    token = convenio[1][2]
+        #url = convenio[0][2] + "/api/summaries"
+        url = convenio[1][2] + "/api/summaries"
+    #token = convenio[1][2]
+    token = convenio[0][2]
     _send_cpe_anulados(url, token, header_dics)
 
 
@@ -74,3 +78,27 @@ def _send_cpe_anulados(url, token, data):
                 print(response.content)
                 print(response.status_code)
         #cont += 1
+
+def create_rechazados(header_dics):
+    convenio = read_empresa_pgsql()
+    url = convenio[1][2] + "/api/documents"
+    token = convenio[0][2]
+    _send_cpe_rechazados(url, token, header_dics)
+
+def _send_cpe_rechazados(url, token, data):
+    header = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer {}'.format(token)
+    }
+    for rechazados in data:
+            print(rechazados)
+            response = requests.post(
+                url, json=rechazados, headers=header, verify=False)
+            if response.status_code == 200:
+                r_json=response.json()
+                external_id=r_json['data']['external_id']
+                update_rechazados_pgsql(external_id, int(rechazados['id_venta']))
+                print(response.content)
+            else:
+                print(response.content)
+                print(response.status_code)

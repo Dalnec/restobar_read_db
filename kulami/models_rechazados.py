@@ -51,7 +51,7 @@ class DetalleVenta:
         return self.nombre_producto
 
 
-def leer_db_access():
+def leer_db_rechazados():
     cnx = __conectarse()
     cursor = cnx.cursor()
     lista_ventas = []
@@ -98,11 +98,11 @@ def leer_db_access():
             WHERE   
                 documento.estado='A' AND 
                 documento.electronico='S' AND
-                ventas.estado = 'A' AND
+                ventas.estado = 'I' AND
                 ventas.estado_declaracion = 'PENDIENTE' AND
                 ventas.estado_declaracion_anulado = '' AND
-                ventas.fecha_hora >= '{}'
-                --ventas.fecha_hora = '2020-08-19 17:03:00'
+                ventas.observaciones_declaracion = '' AND
+                ventas.fecha_hora > '2020-08-01'
             ORDER BY id_venta
         """
 

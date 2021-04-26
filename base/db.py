@@ -62,7 +62,7 @@ def update_venta_anulados_pgsql(ext_id, id):
         cnx = __conectarse()
         cursor = cnx.cursor()
         cursor.execute(
-            "UPDATE gulash.ventas SET observaciones_declaracion = %s, estado_declaracion='PROCESADO', estado_declaracion_anulado='PROCESADO' WHERE id_venta = %s", (ext_id, id))
+            "UPDATE gulash.ventas SET observaciones_declaracion = %s, estado_declaracion='ANULADO', estado_declaracion_anulado='PROCESADO' WHERE id_venta = %s", (ext_id, id))
         cnx.commit()
     finally:
         # closing database connection
@@ -70,3 +70,15 @@ def update_venta_anulados_pgsql(ext_id, id):
             cursor.close()
             cnx.close()
 
+def update_rechazados_pgsql(ext_id, id):
+    try:
+        cnx = __conectarse()
+        cursor = cnx.cursor()
+        cursor.execute(
+            "UPDATE gulash.ventas SET observaciones_declaracion = %s, estado_declaracion='PENDIENTE', estado_declaracion_anulado='' WHERE id_venta = %s", (ext_id, id))
+        cnx.commit()
+    finally:
+        # closing database connection
+        if (cnx):
+            cursor.close()
+            cnx.close()
