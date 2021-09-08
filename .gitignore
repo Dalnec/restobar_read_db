@@ -11,3 +11,5 @@ Faqture.spec
 token.pickle
 backup/credenciales/
 *.ico
+logs.log
+logger.py
