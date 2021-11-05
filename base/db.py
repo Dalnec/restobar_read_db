@@ -34,7 +34,7 @@ def update_venta_pgsql(ext_id, id, estado):
         cnx = __conectarse()
         cursor = cnx.cursor()
         cursor.execute(
-            "UPDATE gulash.ventas SET observaciones_declaracion = %s, estado_declaracion=%s WHERE id_venta = %s", (ext_id, estado, id))
+            "UPDATE gulash.ventas SET external_id = %s, estado_declaracion=%s WHERE id_venta = %s", (ext_id, estado, id))
         cnx.commit() #Guarda los cambios en la bd
     finally:
         # closing database connection
@@ -63,6 +63,19 @@ def update_venta_anulados_pgsql(ext_id, id, estado):
         cursor = cnx.cursor()
         cursor.execute(
             "UPDATE gulash.ventas SET observaciones_declaracion = %s, estado_declaracion='ANULADO', estado_declaracion_anulado=%s WHERE id_venta = %s", (ext_id, estado, id))
+        cnx.commit()
+    finally:
+        # closing database connection
+        if (cnx):
+            cursor.close()
+            cnx.close()
+
+def update_venta_anulados_consultado_pgsql(ext_id, id, estado):
+    try:
+        cnx = __conectarse()
+        cursor = cnx.cursor()
+        cursor.execute(
+            "UPDATE gulash.ventas SET external_id = %s, estado_declaracion='ANULADO', estado_declaracion_anulado=%s WHERE id_venta = %s", (ext_id, estado, id))
         cnx.commit()
     finally:
         # closing database connection
@@ -109,7 +122,83 @@ def update_resumen_pgsql(ext_id, id, estado):
         cnx = __conectarse()
         cursor = cnx.cursor()
         cursor.execute(
-            "UPDATE gulash.ventas SET estado_declaracion_anulado = %s, estado_declaracion = %s WHERE id_venta = %s", (ext_id, estado, id))
+            "UPDATE gulash.ventas SET observaciones_declaracion = %s, estado_declaracion = %s WHERE id_venta = %s", (ext_id, estado, id))
+        cnx.commit()
+    finally:
+        # closing database connection
+        if (cnx):
+            cursor.close()
+            cnx.close()
+
+def get_resumen_por_consultar_pgsql():
+    try:
+        cnx = __conectarse()
+        cursor = cnx.cursor()
+        cursor.execute("SELECT id_venta, observaciones_declaracion FROM gulash.ventas WHERE estado_declaracion = 'POR CONSULTAR' ORDER BY fecha_hora LIMIT 1")
+        return cursor.fetchone()
+    finally:
+        # closing database connection
+        if (cnx):
+            cursor.close()
+            cnx.close()
+
+def update_consultar_pgsql(estado, ext_id, id):
+    try:
+        cnx = __conectarse()
+        cursor = cnx.cursor()
+        cursor.execute(
+            "UPDATE gulash.ventas SET observaciones_declaracion = %s, estado_declaracion = %s WHERE id_venta = %s", (ext_id, estado, id))
+        cnx.commit()
+    finally:
+        # closing database connection
+        if (cnx):
+            cursor.close()
+            cnx.close()
+
+def update_no_200(estado, id):
+    try:
+        cnx = __conectarse()
+        cursor = cnx.cursor()
+        cursor.execute(
+            "UPDATE gulash.ventas SET estado_declaracion = %s WHERE id_venta = %s", (estado, id))
+        cnx.commit()
+    finally:
+        # closing database connection
+        if (cnx):
+            cursor.close()
+            cnx.close()
+
+def get_retry_date_pgsql():
+    try:
+        datenow = time.localtime()
+        datenow = time.strftime("%Y-%m-%d", datenow)
+        cnx = __conectarse()
+        cursor = cnx.cursor()
+        consulta = """ SELECT fecha_hora, estado_declaracion, external_id 
+                        FROM gulash.ventas as V, gulash.documento AS T
+                        WHERE T.id_documento = V.id_documento
+                        AND fecha_hora > '2021-10-01' 
+                        AND T.codigo_sunat in ('01','03')
+                        AND estado_declaracion in ('PENDIENTE', 'POR RESUMIR', 'POR CONSULTAR', 'ANULADO', 'PROCESADO R', 'PROCESADO C')
+                        AND estado_declaracion_anulado in  ('', 'POR CONSULTAR')
+                        AND V.estado = 'I'
+                        ORDER BY fecha_hora 
+                        LIMIT 1;"""
+        # consulta = """ SELECT fecha_hora, estado_declaracion, external_id FROM comercial.ventas WHERE estado_declaracion in ('PROCESADO V', 'PROCESADO R', 'PROCESADO C') AND fecha_hora < '{}' AND estado_declaracion_anulado = 'PENDIENTE' ORDER BY fecha_hora LIMIT 1 """
+        cursor.execute(consulta.format(datenow))
+        date_resumen = cursor.fetchone()
+        return date_resumen
+    finally:
+        # closing database connection
+        if (cnx):
+            cursor.close()
+            cnx.close()
+
+def update_retry_anulates(estado_d, estado_d_a, ext_id, id):
+    try:
+        cnx = __conectarse()
+        cursor = cnx.cursor()
+        cursor.execute( "UPDATE gulash.ventas SET estado_declaracion = %s, estado_declaracion_anulado = %s, external_id = %s WHERE id_venta = %s", (estado_d, estado_d_a, ext_id, id))
         cnx.commit()
     finally:
         # closing database connection

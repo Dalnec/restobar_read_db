@@ -67,7 +67,7 @@ def leer_db_banulados():
                 ventas.id_venta,
                 ventas.fecha_hora,
                 documento.codigo_sunat,              
-                ventas.observaciones_declaracion,
+                ventas.external_id,
                 'Error en documento' as motivo_anulacion,
                 ventas.codigo_cliente
             FROM
@@ -77,7 +77,7 @@ def leer_db_banulados():
                 documento.id_documento = ventas.id_documento AND
                 ventas.estado = 'I' AND
                 ventas.estado_declaracion_anulado = '' AND
-                ventas.estado_declaracion = 'PENDIENTE' AND
+                ventas.estado_declaracion = 'ANULADO' AND
                 documento.codigo_sunat = '03' AND
                 ventas.observaciones_declaracion != ''
             ORDER BY ventas.fecha_hora

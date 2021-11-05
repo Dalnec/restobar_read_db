@@ -1,6 +1,9 @@
+import asyncio
 import time
 import sys
 import configparser
+
+from pseapi.api import create_consulta
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -10,6 +13,7 @@ db_time2 = config['BACKUP']['BU_TIME2']
 state_doc = eval(config['MAIN']['M_DOC'])
 state_anul = eval(config['MAIN']['M_ANUL'])
 state_resumen = eval(config['MAIN']['M_RESUMEN'])
+state_retry = eval(config['MAIN']['M_RETRY'])
 
 if __name__ == "__main__":
     sys.path.append('kulami')
@@ -21,8 +25,9 @@ if __name__ == "__main__":
     from kulami.models_annulled import leer_db_fanulados, leer_db_banulados
     from kulami.models_rechazados import leer_db_rechazados
     from kulami.models_annulled_consulta import leer_db_anulados_consultar
-    from kulami.models_resumen import leer_db_resumen
-    from pseapi.api import create_document, create_document_anulados, create_anulados_consultar, create_resumen
+    from kulami.models_resumen import leer_db_resumen, leer_db_consulta
+    from kulami.models_retry import leer_db_to_retry
+    from pseapi.api import create_document, create_document_anulados, create_anulados_consultar, create_resumen, get_cpe_docs
     from backup.postgresql_backup import backup
     from base.db import _get_time
     from logger import log
@@ -85,3 +90,24 @@ if __name__ == "__main__":
         except Exception as e:
             log.error(f'Resumen Excepcion: {e}')
             time.sleep(2)
+
+        try:
+            if state_resumen:
+                formato, lista_consultar = leer_db_consulta()
+                create_consulta(formato, lista_consultar)
+                time.sleep(1)
+        except Exception as e:
+            log.error(f'Consulta Excepcion: {e}')
+            time.sleep(2)
+        
+        if state_retry: #time_now >= db_time and time_now <= db_time2 and db_state:
+            try:
+                date_retry, list_retry  = leer_db_to_retry()
+                # asyncio.run(get_cpe_docs(date_retry))
+                loop = asyncio.get_event_loop()
+                loop.run_until_complete(get_cpe_docs(date_retry, list_retry))
+                loop.run_until_complete(asyncio.sleep(0))
+                # loop.close()
+            except Exception as e:
+                log.error(f'Retry: {e}') 
+                time.sleep(1)

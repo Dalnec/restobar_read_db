@@ -1,6 +1,6 @@
 import pyodbc
 import psycopg2
-from base.db import __conectarse, get_date_por_resumen_pgsql
+from base.db import __conectarse, get_date_por_resumen_pgsql, get_resumen_por_consultar_pgsql
 import time
 
 def _ver_documentos(dia):
@@ -16,7 +16,7 @@ def _ver_documentos(dia):
             FROM gulash.ventas AS V, gulash.documento AS D
             WHERE D.id_documento = V.id_documento 
                 AND V.estado_declaracion='POR RESUMIR'
-                AND V.observaciones_declaracion != '' 
+                AND V.external_id != '' 
                 AND D.codigo_sunat = '03'
                 AND (V.fecha_hora >= '{} 00:00:00') AND (V.fecha_hora <= '{} 23:59:00') --fecha obtenida
             ORDER BY V.fecha_hora;
@@ -46,30 +46,31 @@ def _generate_formato(date_resumen):
     header_dic['codigo_tipo_proceso'] = '1'
     return header_dic
 
-def leer_db_consulta():
+def _ver_documentos_por_consultar(json):
     cnx = __conectarse()
     cursor = cnx.cursor()
     
-    sql_header = """SELECT id_resumen, ticket, ext_id_resumen 
-                    FROM comercial.resumen WHERE filename = '' AND ticket != '' 
-                    ORDER BY fecha_hora DESC LIMIT 1"""
-    cursor.execute(sql_header)
-    estado = cursor.fetchone()
+    sql_data = """SELECT id_venta,
+                    fecha_hora,
+                    num_serie,
+                    num_documento,
+                    estado,
+                    estado_declaracion,
+                    estado_declaracion_anulado,
+                    observaciones_declaracion
+                FROM gulash.ventas
+                WHERE observaciones_declaracion = '{}' """
+    cursor.execute(sql_data.format(json))
+    lista_consultar = cursor.fetchall()
     cursor.close()
     cnx.close()
-    return _generate_consulta(estado)
+    return lista_consultar
 
-def _generate_consulta(estado):
-
-    header_dics = []
-    if not (estado is None):
-        header_dic = {}
-        
-        header_dic['id_resumen'] = estado[0]
-        header_dic['ticket'] = estado[1]
-        header_dic['external_id'] = estado[2]
-
-        header_dics.append(header_dic)
-
-    return header_dics
+def leer_db_consulta():
+    to_consultar = get_resumen_por_consultar_pgsql()
+    if to_consultar and to_consultar[1] != '':
+        lista_consultar = _ver_documentos_por_consultar(to_consultar[1])
+        return to_consultar[1], lista_consultar
+    else:
+        return [], []
 
